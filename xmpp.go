@@ -70,7 +70,7 @@ type Server struct {
 	authenticate    func(username, password string) bool
 	handleMessage   func(msg XmppMessage)
 	messageChannels map[string][]chan Message
-	handlers        map[string]func(io.Writer, IQ)
+	handlers        map[string]func(io.Writer, Request)
 }
 
 // StreamError is a generic error related to a stream.
@@ -134,16 +134,21 @@ type IQ struct {
 	Pings   []Ping  `xml:"ping"`
 }
 
+type Request struct{
+    Id string
+    User string
+}
+
 func NewServer(domain string) (srv Server) {
 	srv.domain = domain
 	srv.MessageChannel = make(chan Message)
 	srv.messageChannels = make(map[string][]chan Message)
-	srv.handlers = make(map[string]func(io.Writer, IQ))
+	srv.handlers = make(map[string]func(io.Writer, Request))
 	go srv.distributeMessages()
 	return srv
 }
 
-func (srv *Server) HandleQuery(query string, handler func(io.Writer, IQ)) {
+func (srv *Server) HandleQuery(query string, handler func(io.Writer, Request)) {
 	srv.handlers[query] = handler
 }
 
@@ -369,7 +374,8 @@ func (srv *Server) handleReads(conn xmppConn, user_chan chan Message) {
 func (srv *Server) handleIQ(conn xmppConn, iq IQ) {
 	for _, query := range iq.Queries {
 		if handler, ok := srv.handlers[query.Xmlns]; ok {
-			handler(conn, iq)
+            request := Request{iq.Id, conn.username}
+			handler(conn, request)
 		}
 	}
 	for _, ping := range iq.Pings {
